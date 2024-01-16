@@ -17,19 +17,19 @@ $(function () {
         };
 
         self.onBeforeBinding = function () {
-            self.snapshotUrl = self.settings.settings.plugins.classicwebcam.snapshot;
-            self.flipH = self.settings.settings.plugins.classicwebcam.flipH;
-            self.flipV = self.settings.settings.plugins.classicwebcam.flipV;
-            self.rotate90 = self.settings.settings.plugins.classicwebcam.rotate90;
-            self.streamUrl = self.settings.settings.plugins.classicwebcam.stream;
+            self.snapshotUrl = self.settings.settings.plugins.bambuwebcam.snapshot;
+            self.flipH = self.settings.settings.plugins.bambuwebcam.flipH;
+            self.flipV = self.settings.settings.plugins.bambuwebcam.flipV;
+            self.rotate90 = self.settings.settings.plugins.bambuwebcam.rotate90;
+            self.streamUrl = self.settings.settings.plugins.bambuwebcam.stream;
             self.webcamEnabled = self.settings.settings.webcam.webcamEnabled;
-            self.streamRatio = self.settings.settings.plugins.classicwebcam.streamRatio;
+            self.streamRatio = self.settings.settings.plugins.bambuwebcam.streamRatio;
             self.streamTimeout =
-                self.settings.settings.plugins.classicwebcam.streamTimeout;
+                self.settings.settings.plugins.bambuwebcam.streamTimeout;
             self.streamWebrtcIceServers =
-                self.settings.settings.plugins.classicwebcam.streamWebrtcIceServers;
+                self.settings.settings.plugins.bambuwebcam.streamWebrtcIceServers;
             self.streamWebrtcIceServersText = ko.observable("");
-            self.cacheBuster = self.settings.settings.plugins.classicwebcam.cacheBuster;
+            self.cacheBuster = self.settings.settings.plugins.bambuwebcam.cacheBuster;
             self.available_ratios = ["16:9", "4:3"];
 
             self.webRtcServersToText();

@@ -11,6 +11,7 @@ from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
 
 import logging
 import logging.handlers
+import threading
 
 import octoprint.plugin
 from octoprint.schema.webcam import RatioEnum, Webcam, WebcamCompatibility
@@ -22,8 +23,8 @@ class BambuWebCamPlugin(
     octoprint.plugin.TemplatePlugin,
     octoprint.plugin.SettingsPlugin,
     octoprint.plugin.WebcamProviderPlugin,
-    octoprint.plugin.WizardPlugin,
-)
+    octoprint.plugin.WizardPlugin):
+
     def __init__(self):
         self._capture_mutex = threading.Lock()
         self._webcam_name = "classic"
@@ -93,7 +94,7 @@ class BambuWebCamPlugin(
         return [
             Webcam(
                 name=self._webcam_name,
-                displayName="Classic Webcam",
+                displayName="Bambu Webcam",
                 flipH=flipH,
                 flipV=flipV,
                 rotate90=rotate90,
@@ -165,68 +166,68 @@ class BambuWebCamPlugin(
     def get_settings_version(self):
         return 1
 
-    def on_settings_migrate(self, target, current):
-        if current is None:
-            config = self._settings.global_get(["webcam"])
-            if config:
-                self._logger.info(
-                    "Migrating settings from webcam to plugins.classicwebcam..."
-                )
+    # def on_settings_migrate(self, target, current):
+    #     if current is None:
+    #         config = self._settings.global_get(["webcam"])
+    #         if config:
+    #             self._logger.info(
+    #                 "Migrating settings from webcam to plugins.classicwebcam..."
+    #             )
 
-                # flipH
-                self._settings.set_boolean(["flipH"], config.get("flipH", False))
-                self._settings.global_remove(["webcam", "flipH"])
+    #             # flipH
+    #             self._settings.set_boolean(["flipH"], config.get("flipH", False))
+    #             self._settings.global_remove(["webcam", "flipH"])
 
-                # flipV
-                self._settings.set_boolean(["flipV"], config.get("flipV", False))
-                self._settings.global_remove(["webcam", "flipV"])
+    #             # flipV
+    #             self._settings.set_boolean(["flipV"], config.get("flipV", False))
+    #             self._settings.global_remove(["webcam", "flipV"])
 
-                # rotate90
-                self._settings.set_boolean(["rotate90"], config.get("rotate90", False))
-                self._settings.global_remove(["webcam", "rotate90"])
+    #             # rotate90
+    #             self._settings.set_boolean(["rotate90"], config.get("rotate90", False))
+    #             self._settings.global_remove(["webcam", "rotate90"])
 
-                # stream
-                self._settings.set(["stream"], config.get("stream", ""))
-                self._settings.global_remove(["webcam", "stream"])
+    #             # stream
+    #             self._settings.set(["stream"], config.get("stream", ""))
+    #             self._settings.global_remove(["webcam", "stream"])
 
-                # streamTimeout
-                self._settings.set_int(["streamTimeout"], config.get("streamTimeout", 5))
-                self._settings.global_remove(["webcam", "streamTimeout"])
+    #             # streamTimeout
+    #             self._settings.set_int(["streamTimeout"], config.get("streamTimeout", 5))
+    #             self._settings.global_remove(["webcam", "streamTimeout"])
 
-                # streamRatio
-                self._settings.set(["streamRatio"], config.get("streamRatio", "16:9"))
-                self._settings.global_remove(["webcam", "streamRatio"])
+    #             # streamRatio
+    #             self._settings.set(["streamRatio"], config.get("streamRatio", "16:9"))
+    #             self._settings.global_remove(["webcam", "streamRatio"])
 
-                # streamWebrtcIceServers
-                self._settings.set(
-                    ["streamWebrtcIceServers"],
-                    config.get(
-                        "streamWebrtcIceServers", ["stun:stun.l.google.com:19302"]
-                    ),
-                )
-                self._settings.global_remove(["webcam", "streamWebrtcIceServers"])
+    #             # streamWebrtcIceServers
+    #             self._settings.set(
+    #                 ["streamWebrtcIceServers"],
+    #                 config.get(
+    #                     "streamWebrtcIceServers", ["stun:stun.l.google.com:19302"]
+    #                 ),
+    #             )
+    #             self._settings.global_remove(["webcam", "streamWebrtcIceServers"])
 
-                # snapshot
-                self._settings.set(["snapshot"], config.get("snapshot", ""))
-                self._settings.global_remove(["webcam", "snapshot"])
+    #             # snapshot
+    #             self._settings.set(["snapshot"], config.get("snapshot", ""))
+    #             self._settings.global_remove(["webcam", "snapshot"])
 
-                # cacheBuster
-                self._settings.set_boolean(
-                    ["cacheBuster"], config.get("cacheBuster", False)
-                )
-                self._settings.global_remove(["webcam", "cacheBuster"])
+    #             # cacheBuster
+    #             self._settings.set_boolean(
+    #                 ["cacheBuster"], config.get("cacheBuster", False)
+    #             )
+    #             self._settings.global_remove(["webcam", "cacheBuster"])
 
-                # snapshotTimeout
-                self._settings.set_int(
-                    ["snapshotTimeout"], config.get("snapshotTimeout", 5)
-                )
-                self._settings.global_remove(["webcam", "snapshotTimeout"])
+    #             # snapshotTimeout
+    #             self._settings.set_int(
+    #                 ["snapshotTimeout"], config.get("snapshotTimeout", 5)
+    #             )
+    #             self._settings.global_remove(["webcam", "snapshotTimeout"])
 
-                # snapshotSslValidation
-                self._settings.set_boolean(
-                    ["snapshotSslValidation"], config.get("snapshotSslValidation", True)
-                )
-                self._settings.global_remove(["webcam", "snapshotSslValidation"])
+    #             # snapshotSslValidation
+    #             self._settings.set_boolean(
+    #                 ["snapshotSslValidation"], config.get("snapshotSslValidation", True)
+    #             )
+    #             self._settings.global_remove(["webcam", "snapshotSslValidation"])
 
     # ~~ WizardPlugin API
 
@@ -246,9 +247,7 @@ class BambuWebCamPlugin(
 __plugin_name__ = "Bambu Lab Webcam Plugin"
 __plugin_author__ = "Shell M. Shrader"
 __plugin_description__ = "Provides a simple webcam viewer in OctoPrint's UI, images provided by an MJPEG webcam."
-__plugin_disabling_discouraged__ = gettext(
-    "This plugin provides the standard webcam in OctoPrint. If you do not have any other plugin providing a webcam set up, the webcam section in the control tab will no longer be visible."
-)
+
 __plugin_license__ = "AGPLv3"
 __plugin_pythoncompat__ = ">=3.7,<4"
 __plugin_implementation__ = BambuWebCamPlugin()
