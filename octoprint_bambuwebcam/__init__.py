@@ -22,6 +22,7 @@ class BambuWebCamPlugin(
     octoprint.plugin.AssetPlugin,
     octoprint.plugin.TemplatePlugin,
     octoprint.plugin.SettingsPlugin,
+    octoprint.plugin.StartupPlugin,
     octoprint.plugin.WebcamProviderPlugin):
     # octoprint.plugin.WizardPlugin):
 
@@ -31,6 +32,11 @@ class BambuWebCamPlugin(
 
     # ~~ TemplatePlugin API
 
+    def on_startup(host, port):
+        global encoderLock
+        encoderLock = threading.Lock()
+        threading.Thread(target=web_server_thread).start()
+        
     def get_assets(self):
         # return {
         #     "js": [
