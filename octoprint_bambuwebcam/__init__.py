@@ -51,14 +51,14 @@ class BambuWebCamPlugin(
             },
             {
                 "type": "webcam",
-                "name": "Classic Webcam",
+                "name": "Bambu Webcam",
                 "template": "classicwebcam_webcam.jinja2",
                 "custom_bindings": True,
                 "suffix": "_real",
             },
             {
                 "type": "wizard",
-                "name": "Classic Webcam Wizard",
+                "name": "Bambu Webcam Wizard",
                 "template": "classicwebcam_wizard.jinja2",
                 "suffix": "_wizard",
             },
