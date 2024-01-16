@@ -22,8 +22,8 @@ class BambuWebCamPlugin(
     octoprint.plugin.AssetPlugin,
     octoprint.plugin.TemplatePlugin,
     octoprint.plugin.SettingsPlugin,
-    octoprint.plugin.WebcamProviderPlugin,
-    octoprint.plugin.WizardPlugin):
+    octoprint.plugin.WebcamProviderPlugin):
+    # octoprint.plugin.WizardPlugin):
 
     def __init__(self):
         self._capture_mutex = threading.Lock()
@@ -32,11 +32,19 @@ class BambuWebCamPlugin(
     # ~~ TemplatePlugin API
 
     def get_assets(self):
+        # return {
+        #     "js": [
+        #         "js/classicwebcam.js",
+        #         "js/classicwebcam_settings.js",
+        #         "js/classicwebcam_wizard.js",
+        #     ],
+        #     "less": ["less/classicwebcam.less"],
+        #     "css": ["css/classicwebcam.css"],
+        # }
         return {
             "js": [
                 "js/classicwebcam.js",
                 "js/classicwebcam_settings.js",
-                "js/classicwebcam_wizard.js",
             ],
             "less": ["less/classicwebcam.less"],
             "css": ["css/classicwebcam.css"],
@@ -56,12 +64,12 @@ class BambuWebCamPlugin(
                 "custom_bindings": True,
                 "suffix": "_real",
             },
-            {
-                "type": "wizard",
-                "name": "Bambu Webcam Wizard",
-                "template": "classicwebcam_wizard.jinja2",
-                "suffix": "_wizard",
-            },
+            # {
+            #     "type": "wizard",
+            #     "name": "Bambu Webcam Wizard",
+            #     "template": "classicwebcam_wizard.jinja2",
+            #     "suffix": "_wizard",
+            # },
         ]
 
     # ~~ WebcamProviderPlugin API
@@ -231,17 +239,17 @@ class BambuWebCamPlugin(
 
     # ~~ WizardPlugin API
 
-    def is_wizard_required(self):
-        required = (
-            not self._get_stream_url()
-            or not self._get_snapshot_url()
-            or not self._settings.global_get(["webcam", "ffmpegPath"])
-        )
-        firstrun = self._settings.global_get(["server", "firstRun"])
-        return required and firstrun
+    # def is_wizard_required(self):
+    #     required = (
+    #         not self._get_stream_url()
+    #         or not self._get_snapshot_url()
+    #         or not self._settings.global_get(["webcam", "ffmpegPath"])
+    #     )
+    #     firstrun = self._settings.global_get(["server", "firstRun"])
+    #     return required and firstrun
 
-    def get_wizard_version(self):
-        return 1
+    # def get_wizard_version(self):
+    #     return 1
 
 
 __plugin_name__ = "Bambu Lab Webcam Plugin"
