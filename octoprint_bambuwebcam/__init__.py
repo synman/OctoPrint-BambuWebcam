@@ -32,10 +32,10 @@ class BambuWebCamPlugin(
 
     # ~~ TemplatePlugin API
 
-    def on_startup(host, port):
+    def on_startup(self, host, port):
         global encoderLock
         encoderLock = threading.Lock()
-        threading.Thread(target=web_server_thread).start()
+        threading.Thread(target=web_server_thread, args=(self,)).start()
         
     def get_assets(self):
         # return {
@@ -512,7 +512,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         self.server.dropSession()
 
-def web_server_thread():
+def web_server_thread(_plugin):
     global exitCode
     global myargs
     global webserver
@@ -520,12 +520,14 @@ def web_server_thread():
     global encodeFps
 
     try:
-        if myargs.ipv == 4:
-            webserver = ThreadingHTTPServer((myargs.v4bindaddress, myargs.port), WebRequestHandler)
-        else:
-            webserver = ThreadingHTTPServerV6((myargs.v6bindaddress, myargs.port), WebRequestHandler)
+        # if myargs.ipv == 4:
+        #     webserver = ThreadingHTTPServer((myargs.v4bindaddress, myargs.port), WebRequestHandler)
+        # else:
+        #     webserver = ThreadingHTTPServerV6((myargs.v6bindaddress, myargs.port), WebRequestHandler)
 
-        print(f"{datetime.datetime.now()}: web server started", flush=True)
+        webserver = ThreadingHTTPServer(("0.0.0.0", 8081), WebRequestHandler)
+
+        _plugin._logger.warn("web server started")
         webserver.serve_forever()
     except Exception as e:
         exitCode = os.EX_SOFTWARE
