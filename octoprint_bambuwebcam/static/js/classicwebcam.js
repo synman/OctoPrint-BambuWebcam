@@ -1,5 +1,7 @@
 $(function () {
     function BambuWebcamViewModel(parameters) {
+        console.log("Webcam constructor");
+
         var self = this;
 
         self.loginState = parameters[0];
@@ -26,6 +28,8 @@ $(function () {
         });
 
         self.onBeforeBinding = function () {
+            console.log("Webcam onBeforeBinding");
+
             // Subscribe to rotation event to ensure we update calculations.
             // We need to wait for the CSS to be updated by KO, thus we use a timeout to
             // ensure our calculations run after the CSS was updated
@@ -347,7 +351,7 @@ $(function () {
 
     OCTOPRINT_VIEWMODELS.push({
         construct: BambuWebcamViewModel,
-        dependencies: ["loginStateViewModel", "BambuWebcamSettingsViewModel"],
+        dependencies: ["loginStateViewModel", "bambuWebcamSettingsViewModel"],
         elements: ["#bambuwebcam_container"]
     });
 });

@@ -259,3 +259,316 @@ __plugin_description__ = "Provides a simple webcam viewer in OctoPrint's UI, ima
 __plugin_license__ = "AGPLv3"
 __plugin_pythoncompat__ = ">=3.7,<4"
 __plugin_implementation__ = BambuWebCamPlugin()
+
+
+import os
+import sys
+import io
+import time
+import datetime
+# import signal
+# import threading
+import traceback
+import socket
+import argparse
+import json
+
+import struct
+import ssl
+
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
+from urllib.parse import urlparse, parse_qs
+from PIL import ImageFont, ImageDraw, Image
+from io import BytesIO
+
+exitCode = os.EX_OK
+myargs = None
+webserver = None
+lastImage = None
+encoderLock = None
+encodeFps = 0.0
+streamFps = {}
+snapshots = 0
+
+class WebRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        global exitCode
+        global myargs
+        global streamFps
+        global snapshots
+
+        if self.path.lower().startswith("/?snapshot"):
+            snapshots = snapshots + 1
+            qs = parse_qs(urlparse(self.path).query)
+            if "rotate" in qs:
+                self.sendSnapshot(rotate=int(qs["rotate"][0]))
+                return
+            if myargs.rotate != -1:
+                self.sendSnapshot(rotate=myargs.rotate)
+                return
+            self.sendSnapshot()
+            return
+
+        if self.path.lower().startswith("/?stream"):
+            qs = parse_qs(urlparse(self.path).query)
+            if "encodewait" in qs:
+                myargs.encodewait = float(qs["encodewait"][0])
+            showFps = myargs.showfps 
+            if "showfps" in self.path.lower():
+                showFps = True
+            if "hidefps" in self.path.lower():
+                showFps = False
+            if "rotate" in qs:
+                self.streamVideo(rotate=int(qs["rotate"][0]), showFps=showFps)
+                return
+            if myargs.rotate != -1:
+                self.streamVideo(rotate=myargs.rotate, showFps=showFps)
+                return
+            self.streamVideo(showFps=showFps)
+            return
+
+        if self.path.lower().startswith("/?info"):
+            self.send_response(200)
+            self.send_header("Content-type", "text/json")
+            self.end_headers()
+            host = self.headers.get('Host')
+
+            fpssum = 0.
+            fpsavg = 0.
+
+            for fps in streamFps:
+                fpssum = fpssum + streamFps[fps]
+
+            if len(streamFps) > 0:
+                fpsavg = fpssum / len(streamFps)
+            else:
+                fpsavg = 0.
+
+            jsonstr = ('{"stats":{"server": "%s", "encodeFps": %.2f, "sessionCount": %d, "avgStreamFps": %.2f, "sessions": %s, "snapshots": %d}, "config": %s}' % (host, self.server.getEncodeFps(), len(streamFps), fpsavg, json.dumps(streamFps) if len(streamFps) > 0 else "{}", snapshots, json.dumps(vars(myargs))))
+            self.wfile.write(jsonstr.encode("utf-8"))
+            return
+
+        if self.path.lower().startswith("/?shutdown"):
+            self.send_response(200)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
+
+            self.wfile.write(("<html><head><title>webcamd - A High Performance MJPEG HTTP Server</title></head><body>" +
+                             "webcamd is shutting down now!</body></html>").encode("utf-8"))
+
+            client = ("%s:%d" % (self.client_address[0], self.client_address[1]))
+            print(f"{datetime.datetime.now()}: shutdown requested by {client}", flush=True)
+
+            exitCode = os.EX_TEMPFAIL
+            self.server.die()
+            self.server.unlockEncoder()
+            return
+
+        self.send_response(404)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        host = self.headers.get('Host')
+        self.wfile.write((
+            "<html><head><title>webcamd - A High Performance MJPEG HTTP Server</title></head><body>Specify <a href='http://" + host +
+            "/?stream'>/?stream</a> to stream, <a href='http://" + host +
+            "/?snapshot'>/?snapshot</a> for a picture, or <a href='http://" + host +
+            "/?info'>/?info</a> for statistics and configuration information</body></html>").encode("utf-8"))
+
+    def log_message(self, format, *args):
+        global myargs
+        if not myargs.loghttp: return
+        print(f"{datetime.datetime.now()}: {self.client_address[0]} {format % args}", flush=True)
+
+
+    def streamVideo(self, rotate=-1, showFps = False):
+        global myargs
+        global streamFps
+
+        try:
+            if self.server.getImage() is None:
+                self.send_response(200)
+                self.send_header("Content-type", "text/html")
+                self.end_headers()
+                self.wfile.write((
+                    "<html><head><title>webcamd - A High Performance MJPEG HTTP Server</title><meta http-equiv='refresh' content='5'>" +
+                    "</head><body>Loading MJPEG Stream . . .</body></html>").encode("utf-8"))
+                return
+            self.send_response(200)
+            self.send_header("Content-type", "multipart/x-mixed-replace; boundary=boundarydonotcross")
+            self.end_headers()
+        except Exception as e:
+            print("%s: error in stream header %s: [%s]" % (datetime.datetime.now(), streamKey, e), flush=True)
+            return
+
+        frames = 0
+        self.server.addSession()
+        streamKey = ("%s:%d" % (socket.getnameinfo((self.client_address[0], 0), 0)[0], self.client_address[1]))
+
+        fpsFont = ImageFont.truetype("SourceCodePro-Regular.ttf", 14)
+        fmA, fmD = fpsFont.getmetrics()
+        fmD = fmD * -1
+        
+        startTime = time.time()
+        primed = False
+        addBreaks = False
+
+        while not self is None and not self.server is None and self.server.isRunning():
+            if time.time() > startTime + 5:
+                streamFps[streamKey] = frames / 5.
+                # if showfps: print("%s: streaming @ %.2f FPS to %s - wait time %.5f" % (datetime.datetime.now(), streamFps[streamKey], streamKey, myargs.streamwait), flush=True)
+                frames = 0
+                startTime = time.time()
+                primed = True
+
+            jpg = self.server.getImage()
+
+            if rotate != -1: jpg = jpg.rotate(rotate)
+
+            if showFps and primed: 
+                draw = ImageDraw.Draw(jpg)
+
+                message = f"{streamKey}\n{datetime.datetime.now()}\nEncode: {round(self.server.getEncodeFps(), 1)} FPS"
+
+                if streamKey in streamFps:
+                    fpssum = 0.
+                    fpsavg = 0.
+                    for fps in streamFps:
+                        fpssum = fpssum + streamFps[fps]
+                    fpsavg = fpssum / len(streamFps)
+                    message = message + f"\nStreams: {len(streamFps)} @ {round(streamFps[streamKey], 1)} FPS"
+
+                bbox = draw.textbbox((0, fmD), message, font=fpsFont)
+                draw.rectangle(bbox, fill="black")
+                draw.text((0, fmD), message, font=fpsFont)
+
+            try:
+                tmpFile = BytesIO()
+                jpg.save(tmpFile, format="JPEG")
+
+                if not addBreaks:
+                    self.wfile.write(b"--boundarydonotcross\r\n")
+                    addBreaks = True
+                else:
+                    self.wfile.write(b"\r\n--boundarydonotcross\r\n")
+
+                self.send_header("Content-type", "image/jpeg")
+                self.send_header("Content-length", str(tmpFile.getbuffer().nbytes))
+                self.send_header("X-Timestamp", "0.000000")
+                self.end_headers()
+
+                self.wfile.write(tmpFile.getvalue())
+
+                time.sleep(myargs.streamwait)
+                frames = frames + 1
+            except Exception as e:
+                # ignore broken pipes & connection reset
+                if e.args[0] not in (32, 104): print(f"{datetime.datetime.now()}: error in stream {streamKey}:: [{e}]", flush=True)
+                break
+
+        if streamKey in streamFps: streamFps.pop(streamKey)
+        self.server.dropSession()
+
+    def sendSnapshot(self, rotate=-1):
+        try:
+            jpg = self.server.getImage()
+
+            if jpg is None:
+                self.send_error(425, "Too Early", "The server is not yet ready to serve requests.  Please try again momentarily.")
+                return
+
+            self.send_response(200)
+            self.send_header("Content-type", "image/jpeg")
+            self.send_header("Content-length", str(len(tmpFile.getvalue())))
+            self.end_headers()
+
+            self.server.addSession()
+
+            if rotate != -1: jpg = jpg.rotate(rotate)
+            fpsFont = ImageFont.truetype("SourceCodePro-Regular.ttf", 14)
+            fmA, fmD = fpsFont.getmetrics()
+            fmD = fmD * -1 
+
+            draw = ImageDraw.Draw(jpg)
+
+            message = f"{socket.getnameinfo((self.client_address[0], 0), 0)[0]}\n{datetime.datetime.now()}"            
+
+            bbox = draw.textbbox((0, fmD), message, font=fpsFont)
+            draw.rectangle(bbox, fill="black")
+            draw.text((0, fmD), message, font=fpsFont)
+
+            tmpFile = BytesIO()
+            jpg.save(tmpFile, "JPEG")
+
+            self.wfile.write(tmpFile.getvalue())
+        except Exception as e:
+            print(f"{datetime.datetime.now()}: error in snapshot: [{e}]", flush=True)
+
+        self.server.dropSession()
+
+def web_server_thread():
+    global exitCode
+    global myargs
+    global webserver
+    global encoderLock
+    global encodeFps
+
+    try:
+        if myargs.ipv == 4:
+            webserver = ThreadingHTTPServer((myargs.v4bindaddress, myargs.port), WebRequestHandler)
+        else:
+            webserver = ThreadingHTTPServerV6((myargs.v6bindaddress, myargs.port), WebRequestHandler)
+
+        print(f"{datetime.datetime.now()}: web server started", flush=True)
+        webserver.serve_forever()
+    except Exception as e:
+        exitCode = os.EX_SOFTWARE
+        print(f"{datetime.datetime.now()}: web server error: [{e}]" , flush=True)
+
+    print(f"{datetime.datetime.now()}: web server thread died", flush=True)
+
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    running = True
+    sessions = 0
+
+    def __init__(self, mixin, server):
+        global encoderLock
+        encoderLock.acquire()
+        super().__init__(mixin, server)
+
+    def getImage(self):
+        global lastImage
+        if not lastImage is None:
+            return lastImage.copy()
+        else:
+            return None
+        
+    def die(self):
+        super().shutdown()
+        self.running = False
+    def isRunning(self):
+        return self.running
+    def addSession(self):
+        global encoderLock
+        if self.sessions == 0 and encoderLock.locked(): encoderLock.release()
+        self.sessions = self.sessions + 1
+    def dropSession(self):
+        global encoderLock
+        global encodeFps
+        global streamFps
+        self.sessions = self.sessions - 1
+        if self.sessions == 0 and not encoderLock.locked():
+            encoderLock.acquire()
+            encodeFps = 0.0
+            streamFps = {}
+    def unlockEncoder(self):
+        global encoderLock
+        if encoderLock.locked(): encoderLock.release()
+    def getSessions(self):
+        return self.sessions
+    def getEncodeFps(self):
+        global encodeFps
+        return encodeFps
+
+class ThreadingHTTPServerV6(ThreadingHTTPServer):
+        address_family = socket.AF_INET6
